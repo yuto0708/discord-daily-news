@@ -66,37 +66,34 @@ async function summarizeWithGemini(newsText, overrideTheme = null) {
 
 目的は3つです。
 1. 毎朝、短時間で世界の重要変化を把握できること
-2. ウェルビーイングと「普通と違った面白い人生」に資する視点を得ること
-3. 事業機会、6か月以内の市場変化、日本市場への意味も見落とさないこと
+2. 単なるニュース要約ではなく「この変化が人の生き方をどう変えるか」まで踏み込むこと
+3. ウェルビーイングと「普通と違った面白い人生」に資する視点を必ず提示すること
 
 基本方針:
-- Discordには短いニュース版を出す
-- Notionには2000〜3000字の詳細版を出す
-- DiscordとNotionは同じテーマを扱うが、文章は使い分ける。完全コピペにしない。
-- 絵文字は一切使わない
-- 煽り、ポエム、SNS的な大げさなテンションは使わない（革命、破壊的、やばい等の安い強調は使わない）
-- 面白さは刺激ではなく、視点の鋭さと論点整理で出す
-- 朝読む前提なので、静かで知的で読みやすい文体にする
-- 同じ意味の繰り返しをしない
-- 「つまり何が重要か」を先に書く
-- 事実と解釈を分ける
-- 断定が難しい箇所には留保を置く
+- 正しいだけの優等生な文章を禁じます。読者の「欲望・不安・希望」に接続してください。
+- 読後に「これ、自分にも関係あるな」「今日を少し変えたくなる」という感覚を残すこと。
+- Discord（短文）とNotion（長文）は文章を使い分け、同じ意味の繰り返しを避けてください。
+- 「注目されそうだ」「重要になりそうだ」で終わる雑なテンプレ予測を徹底排除。
+- 絵文字は一切使わないでください。
+- 煽りすぎず、ポエムすぎず、冷静で知的であるが、人間の血が通った「核心を突いてくる」温度感にしてください。
 
-重要度の判断基準:
-市場構造を変えるか / 6か月以内に実務や投資に影響するか / 日本市場や日本の働き方に意味があるか / 個人の生き方や幸福度に波及するか / 一時的な話題ではなく継続的変化につながるか
+重要度の判断基準・観点（"人生の解像度が上がる" 視点として以下を常に問うこと）:
+- このトピックは、結局どんな人間を有利にし、どんな働き方を古くするか？
+- この変化で、普通の人生から少し外れる余地（自由、一人事業、半隠居）がどこに生まれるか？
+- お金だけでなく、時間、孤独、安心、好奇心にどう影響するか？
 
 本日の曜日テーマ（これに必ず沿って重点を置くこと）:
 【 ${todaysTheme} 】
-※ベースケース、強気ケース、崩れるケースなどの区分も意識し、毎回同じような結論を避けてください技術、市場、規制、生活、働き方、日本市場、個人の行動のいずれかにフォーカスを当ててください。
 
-出力フォーマット（厳密なJSONオブジェクトのみ出力）:
+出力フォーマット（必ず厳密な以下のJSONオブジェクトのみを出力）:
 {
   "discord_content": {
     "title": "タイトル",
-    "summary": "一言で要旨",
-    "what_happened": "事実を簡潔に（300〜600字以内）",
-    "why_important": "意味を簡潔に",
-    "implication": "事業、投資、生活、日本市場のいずれかへの波及"
+    "summary": "一言で要点",
+    "what_happened": "何が起きたか（短く事実のみ）",
+    "why_important": "なぜ重要か（意味を簡潔に）",
+    "implication": "事業や生活への波及",
+    "reader_insight": "今日の読みどころ（この変化は結局どういう人生を可能にし、誰を有利・不利にするのか。読者に関係ある核心を1〜2行で静かに突く）"
   },
   "notion_content": {
     "title": "タイトル",
@@ -105,12 +102,12 @@ async function summarizeWithGemini(newsText, overrideTheme = null) {
     "background": "背景",
     "why_important": "なぜ重要か",
     "business_implication": "事業・市場への示唆",
+    "life_implication": "人生への示唆（どんな人に追い風か、どんな人を置いていくか。自由度、可処分時間、働き方、幸福度、普通ではない選択肢への波及。読者が主体者になる一節を入れること）",
     "japan_context": "日本での意味",
     "counter_argument": "反論・留保",
     "todays_discussion": "今日の論点（今日の【 ${todaysTheme} 】テーマに必ず絡めて、深く静かな考察を記載）",
     "sources": [
-      { "type": "一次情報", "name": "情報源名", "url": "URL" },
-      { "type": "二次情報", "name": "情報源名", "url": "URL" }
+      { "type": "一次情報", "name": "情報源名", "url": "URL" }
     ]
   }
 }
@@ -167,6 +164,7 @@ async function sendToNotion(data) {
     childrenBlocks.push({ object: 'block', type: 'heading_2', heading_2: { rich_text: [{ type: 'text', text: { content: text } }] } });
   };
   const addPara = (text) => {
+    if(!text) return;
     const chunks = String(text).match(/.{1,1500}/g) || [text];
     for (const chunk of chunks) {
       childrenBlocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: chunk } }] } });
@@ -187,6 +185,9 @@ async function sendToNotion(data) {
 
   addHeading("事業・市場への示唆");
   addPara(nc.business_implication);
+
+  addHeading("人生への示唆");
+  addPara(nc.life_implication);
 
   addHeading("日本での意味");
   addPara(nc.japan_context);
@@ -243,9 +244,12 @@ async function sendToDiscord(data, notionUrl) {
   descriptionText += `**波及**\n${dc.implication}\n\n`;
   
   if (notionUrl) {
-    descriptionText += `\n**詳細**\n[詳細版と出典はNotionに保存しました](${notionUrl})`;
-  } else {
-    descriptionText += `\n**詳細**\nNotionの連携設定がないため保存されませんでした。`;
+    descriptionText += `**詳細**\n[詳細版と出典はNotionに保存しました](${notionUrl})\n\n`;
+  }
+  
+  // 今日の読みどころ（核心）をメッセージの最後に配置してスパイスを効かせる
+  if (dc.reader_insight) {
+    descriptionText += `> ${dc.reader_insight}`;
   }
 
   const message = {
@@ -266,7 +270,7 @@ async function sendToDiscord(data, notionUrl) {
   }
 }
 
-// 外部スクリプトからの呼び出し用に関数をエクスポートできるようにしておく
+// 外部スクリプトからの呼び出し用に関数をエクスポート
 export { fetchRssFeeds, summarizeWithGemini, sendToNotion, sendToDiscord };
 
 async function main() {
