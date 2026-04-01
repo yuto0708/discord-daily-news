@@ -3,9 +3,6 @@ import Parser from 'rss-parser';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { Client } from '@notionhq/client';
-import OpenAI from 'openai';
-import fs from 'fs';
-import FormData from 'form-data';
 
 dotenv.config();
 
@@ -13,11 +10,6 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const parser = new Parser({
   headers: { 'User-Agent': 'Mozilla/5.0' }
 });
-
-let openai = null;
-if (process.env.OPENAI_API_KEY) {
-  openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-}
 
 // 世界のトップティアが追う一次情報・大元に近いソースに厳選
 const RSS_SOURCES = [
@@ -60,14 +52,14 @@ function getTodaysTheme() {
   return themes[dayOfWeek];
 }
 
-async function summarizeWithGemini(newsText) {
+async function summarizeWithGemini(newsText, overrideTheme = null) {
   console.log('🤖 Gemini APIで静かで知的な編集者のブリーフを生成中...');
   const modelsToTry = [
     'gemini-2.5-flash',
     'gemini-flash-latest'
   ];
 
-  const todaysTheme = getTodaysTheme();
+  const todaysTheme = overrideTheme || getTodaysTheme();
 
   const prompt = `
 あなたは、海外AI・論文・情勢・経済を毎日収集し、朝に読むための「知的で静かなブリーフを作る編集者」です。
@@ -80,12 +72,11 @@ async function summarizeWithGemini(newsText) {
 基本方針:
 - Discordには短いニュース版を出す
 - Notionには2000〜3000字の詳細版を出す
-- 音声用に約700〜1200字（5分程度）の台本を作成する
-- DiscordとNotion、音声は同じテーマを扱うが、文章は使い分ける。完全コピペにしない。
-- 絵文字は一切使わない（システム側でも排除しています）
+- DiscordとNotionは同じテーマを扱うが、文章は使い分ける。完全コピペにしない。
+- 絵文字は一切使わない
 - 煽り、ポエム、SNS的な大げさなテンションは使わない（革命、破壊的、やばい等の安い強調は使わない）
 - 面白さは刺激ではなく、視点の鋭さと論点整理で出す
-- 朝読む（聞く）前提なので、静かで知的で読みやすい文体にする
+- 朝読む前提なので、静かで知的で読みやすい文体にする
 - 同じ意味の繰り返しをしない
 - 「つまり何が重要か」を先に書く
 - 事実と解釈を分ける
@@ -121,8 +112,7 @@ async function summarizeWithGemini(newsText) {
       { "type": "一次情報", "name": "情報源名", "url": "URL" },
       { "type": "二次情報", "name": "情報源名", "url": "URL" }
     ]
-  },
-  "audio_script": "おはようございます。（名前は名乗らなくて良いです。静かに始めてください）。今日の最重要トピックは...（以降、箇条書きは使わず、自然な話し言葉の台本。1文を短く。15秒の導入、トピック、なぜ重要か、生活等への波及、今日の見るべきポイント、15秒の締めの構成。全体で700〜1200字程度。"要するに"等の案内を入れること。煽らない、静かだが無機質ではないトーン。）"
+  }
 }
 
 ニュースデータ:
@@ -154,30 +144,6 @@ ${newsText.slice(0, 15000)}
   }
 }
 
-// ======= 音声生成 =======
-async function generateAudio(textString) {
-  if (!openai) {
-    console.log('⚠️ OpenAI APIキーがないため、音声生成をスキップします。');
-    return null;
-  }
-  console.log('🎙️ OpenAI TTSで朝の音声を生成中...');
-  const filePath = "todays_brief.mp3";
-  try {
-    const mp3 = await openai.audio.speech.create({
-      model: "tts-1",
-      voice: "nova", // 落ち着いた自然な声
-      input: textString,
-    });
-    const buffer = Buffer.from(await mp3.arrayBuffer());
-    fs.writeFileSync(filePath, buffer);
-    console.log('✅ 音声生成完了');
-    return filePath;
-  } catch (err) {
-    console.error('⚠️ 音声生成エラー:', err.message);
-    return null;
-  }
-}
-
 // ======= Notionへの送信機能 =======
 async function sendToNotion(data) {
   if (!process.env.NOTION_API_KEY || !process.env.NOTION_PARENT_PAGE_ID) {
@@ -201,8 +167,7 @@ async function sendToNotion(data) {
     childrenBlocks.push({ object: 'block', type: 'heading_2', heading_2: { rich_text: [{ type: 'text', text: { content: text } }] } });
   };
   const addPara = (text) => {
-    // 2000文字一気に入れるとNotionのブロック制限に引っかかる場合があるので適切に分割
-    const chunks = text.match(/.{1,1500}/g) || [text];
+    const chunks = String(text).match(/.{1,1500}/g) || [text];
     for (const chunk of chunks) {
       childrenBlocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: chunk } }] } });
     }
@@ -265,7 +230,7 @@ async function sendToNotion(data) {
 }
 
 // ======= Discord送信 =======
-async function sendToDiscord(data, notionUrl, audioPath) {
+async function sendToDiscord(data, notionUrl) {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
   if (!webhookUrl) return;
 
@@ -283,32 +248,26 @@ async function sendToDiscord(data, notionUrl, audioPath) {
     descriptionText += `\n**詳細**\nNotionの連携設定がないため保存されませんでした。`;
   }
 
-  const embed = {
-    title: dc.title,
-    color: 0x4a4a4a, // 静かな色（ダークグレー）
-    description: descriptionText
+  const message = {
+    username: "知的な朝の編集者",
+    content: "",
+    embeds: [{
+      title: dc.title,
+      color: 0x4a4a4a, // 静かな色
+      description: descriptionText
+    }]
   };
 
   try {
-    const form = new FormData();
-    // Discord Embedを含んだメッセージ本体
-    form.append('payload_json', JSON.stringify({
-      username: "知的な朝の編集者",
-      content: "", // 本文はなし、Embedのみでスッキリと
-      embeds: [embed]
-    }));
-    
-    // MP3ファイルがあれば添付
-    if (audioPath && fs.existsSync(audioPath)) {
-      form.append('file', fs.createReadStream(audioPath), 'todays_briefing.mp3');
-    }
-
-    await axios.post(webhookUrl, form, { headers: form.getHeaders() });
+    await axios.post(webhookUrl, message);
     console.log('✅ Discord投稿成功！');
   } catch (err) {
     console.error('⚠️ Discord Webhookエラー:', err.message);
   }
 }
+
+// 外部スクリプトからの呼び出し用に関数をエクスポートできるようにしておく
+export { fetchRssFeeds, summarizeWithGemini, sendToNotion, sendToDiscord };
 
 async function main() {
   const feeds = await fetchRssFeeds();
@@ -316,11 +275,12 @@ async function main() {
 
   const data = await summarizeWithGemini(feeds);
   if (data) {
-    // 限界まで自動化： Notionにページ作成 -> 音声生成 -> Discordへ送信
     const notionUrl = await sendToNotion(data);
-    const audioPath = await generateAudio(data.audio_script);
-    await sendToDiscord(data, notionUrl, audioPath);
+    await sendToDiscord(data, notionUrl);
   }
 }
 
-main().catch(console.error);
+// スクリプトとして直接実行された場合のみmain()を呼ぶ
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(console.error);
+}
