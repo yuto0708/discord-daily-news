@@ -184,7 +184,6 @@ async function sendToDiscord(data) {
     for (const embed of embeds) {
       const message = {
         username: "戦略リサーチャーAI",
-        avatar_url: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/ChatGPT_logo.svg/1024px-ChatGPT_logo.svg.png",
         content: first ? "🌅 おはようございます！本日の最先端情報の戦略的解釈をお届けします📰\n(順不同で配信します)" : "",
         embeds: [embed]
       };
