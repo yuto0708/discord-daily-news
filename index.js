@@ -11,29 +11,38 @@ const parser = new Parser({
   headers: { 'User-Agent': 'Mozilla/5.0' }
 });
 
-// 世界のトップティアが追う一次情報・大元に近いソースに厳選
+// 世界のトップティア・テック系一時・二次情報を大量に追加
 const RSS_SOURCES = [
   'https://hnrss.org/newest?q=AI',
   'https://export.arxiv.org/rss/cs.AI',
   'https://export.arxiv.org/rss/cs.CL',
   'https://export.arxiv.org/rss/cs.LG',
+  'https://techcrunch.com/category/artificial-intelligence/feed/',
+  'https://venturebeat.com/category/ai/feed/',
+  'https://www.theverge.com/rss/artificial-intelligence/index.xml',
+  'https://blogs.nvidia.com/feed/',
+  'https://machinelearning.apple.com/rss.xml'
 ];
 
 async function fetchRssFeeds() {
-  console.log('📰 RSS情報を取得中...');
+  console.log('📰 RSS情報を取得中（大量のテクノロジー情報を横断収集）...');
   let combinedNews = '';
+  let count = 0;
   
   for (const url of RSS_SOURCES) {
     try {
       const feed = await parser.parseURL(url);
-      const topItems = feed.items.slice(0, 5);
+      const topItems = feed.items.slice(0, 5); // 1ソースあたり最新5件取得
       topItems.forEach(item => {
-        combinedNews += `\nソース: ${feed.title}\n題名: ${item.title}\nリンク: ${item.link}\n本文概要: ${item.contentSnippet?.slice(0, 300) || ''}\n---`;
+        combinedNews += `\n[ニュース${count + 1}] ソース: ${feed.title}\n題名: ${item.title}\nリンク: ${item.link}\n概要: ${item.contentSnippet?.slice(0, 300) || ''}\n---`;
+        count++;
       });
     } catch (e) {
       console.log(`⚠️ URL取得エラー (${url}): ${e.message}`);
     }
   }
+  
+  console.log(`✅ 合計 ${count} 件のニュース（点）の取得に成功しました。`);
   return combinedNews;
 }
 
@@ -53,7 +62,7 @@ function getTodaysTheme() {
 }
 
 async function summarizeWithGemini(newsText, overrideTheme = null) {
-  console.log('🤖 Gemini APIで静かで知的な編集者のブリーフを生成中...');
+  console.log('🤖 Gemini APIでバラバラの情報を統合し「大きなうねり」を生成中...');
   const modelsToTry = [
     'gemini-2.5-flash',
     'gemini-flash-latest'
@@ -62,58 +71,49 @@ async function summarizeWithGemini(newsText, overrideTheme = null) {
   const todaysTheme = overrideTheme || getTodaysTheme();
 
   const prompt = `
-あなたは、海外AI・論文・情勢・経済を毎日収集し、朝に読むための「知的で静かなブリーフを作る編集者」です。
+あなたは、海外AI・論文・情勢・経済の大量のニュースを俯瞰し、背後にある構造的変化をあぶり出す「マクロ戦略リサーチャー」です。
 
-目的は3つです。
-1. 毎朝、短時間で世界の重要変化を把握できること
-2. 単なるニュース要約ではなく「この変化が人の生き方をどう変えるか」まで踏み込むこと
-3. ウェルビーイングと「普通と違った面白い人生」に資する視点を必ず提示すること
+目的は以下の3つです。
+1. 提供された20〜40件近くのバラバラのニュース（点）を繋ぎ合わせ、「今日、全体を通してどんな地殻変動・メガトレンド（1つの大きなうねり）が起きているか」を抽出すること。
+2. 読者が「1つのニュースの深掘り」なら自分でできるように、あなたは「俯瞰したからこそ見える複数の事実が織りなす大局観」を提示すること。
+3. 自己啓発的なポエムや、感情に訴えかけるだけの無理な人生論・精神論は一切排除すること。「この変化はどういう人間や事業を有利・不利にするのか」を冷徹かつ知的に分析すること。
 
 基本方針:
-- 正しいだけの優等生な文章を禁じます。読者の「欲望・不安・希望」に接続してください。
-- 読後に「これ、自分にも関係あるな」「今日を少し変えたくなる」という感覚を残すこと。
-- Discord（短文）とNotion（長文）は文章を使い分け、同じ意味の繰り返しを避けてください。
-- 「注目されそうだ」「重要になりそうだ」で終わる雑なテンプレ予測を徹底排除。
-- 絵文字は一切使わないでください。
-- 煽りすぎず、ポエムすぎず、冷静で知的であるが、人間の血が通った「核心を突いてくる」温度感にしてください。
+- 「〜が注目されそうだ」で終わるテンプレ結論を禁止。
+- 直訳調、無味乾燥な優等生ワードを禁止。
+- 分析に用いた出典群（ニュース群）は「Sources（出典）」にすべて（最低5件〜10件程度）漏らさず記載させること。
+- 人生への接続とは「ポエムを書くこと」ではなく、「大きな構造を見せ、読者の意思決定の前提を変えること」です。
+- 文字数はDiscordは短く、Notionは分析的に詳細に分けること。
 
-重要度の判断基準・観点（"人生の解像度が上がる" 視点として以下を常に問うこと）:
-- このトピックは、結局どんな人間を有利にし、どんな働き方を古くするか？
-- この変化で、普通の人生から少し外れる余地（自由、一人事業、半隠居）がどこに生まれるか？
-- お金だけでなく、時間、孤独、安心、好奇心にどう影響するか？
-
-本日の曜日テーマ（これに必ず沿って重点を置くこと）:
+本日の曜日テーマ（メガトレンドを解釈する際にこの視点を意識する）:
 【 ${todaysTheme} 】
 
 出力フォーマット（必ず厳密な以下のJSONオブジェクトのみを出力）:
 {
   "discord_content": {
-    "title": "タイトル",
-    "summary": "一言で要点",
-    "what_happened": "何が起きたか（短く事実のみ）",
-    "why_important": "なぜ重要か（意味を簡潔に）",
-    "implication": "事業や生活への波及",
-    "reader_insight": "今日の読みどころ（この変化は結局どういう人生を可能にし、誰を有利・不利にするのか。読者に関係ある核心を1〜2行で静かに突く）"
+    "title": "今日のメガトレンド（タイトル）",
+    "summary": "複数のニュースから炙り出される、今日一番大きな構造変化（1〜2文）",
+    "what_happened_macro": "水面下で起きているうねりを、どのニュース（複数）が示唆しているか",
+    "macro_implication": "このうねりが、事業や働き方の「勝ち筋・生き筋」をどう変えるか（冷静な指摘）",
+    "reader_insight": "今日の知見（読者に関係ある分析的でシビアな核心を1行で）"
   },
   "notion_content": {
-    "title": "タイトル",
+    "title": "今日のメガトレンド",
     "summary": "要旨",
-    "what_happened": "何が起きたか",
-    "background": "背景",
-    "why_important": "なぜ重要か",
-    "business_implication": "事業・市場への示唆",
-    "life_implication": "人生への示唆（どんな人に追い風か、どんな人を置いていくか。自由度、可処分時間、働き方、幸福度、普通ではない選択肢への波及。読者が主体者になる一節を入れること）",
+    "mega_trend": "今日の構造変化の核心（点と点を繋いで分かった真実）",
+    "supporting_facts": "トレンドを裏付ける具体的な出来事群（複数のニュースの組み合わせ・対比）",
+    "business_and_life_implication": "事業と個人の生き方への示唆（この変化はどんな人を有利にし、どんな人を過去のものにするか。普通から外れる余地はどこに生まれるか）",
     "japan_context": "日本での意味",
     "counter_argument": "反論・留保",
-    "todays_discussion": "今日の論点（今日の【 ${todaysTheme} 】テーマに必ず絡めて、深く静かな考察を記載）",
+    "todays_discussion": "曜日のテーマ【 ${todaysTheme} 】に絡めた今日の論点",
     "sources": [
-      { "type": "一次情報", "name": "情報源名", "url": "URL" }
+      { "type": "情報種別", "name": "記事タイトル/情報源", "url": "URL" }
     ]
   }
 }
 
-ニュースデータ:
-${newsText.slice(0, 15000)}
+大量のニュースデータ（点）:
+${newsText.slice(0, 25000)}
 `;
 
   let responseText = null;
@@ -171,23 +171,17 @@ async function sendToNotion(data) {
     }
   };
 
-  addHeading("要旨");
+  addHeading("メガトレンド（要旨）");
   addPara(nc.summary);
   
-  addHeading("何が起きたか");
-  addPara(nc.what_happened);
+  addHeading("今日の構造変化の核心");
+  addPara(nc.mega_trend);
 
-  addHeading("背景");
-  addPara(nc.background);
+  addHeading("トレンドを裏付ける出来事");
+  addPara(nc.supporting_facts);
 
-  addHeading("なぜ重要か");
-  addPara(nc.why_important);
-
-  addHeading("事業・市場への示唆");
-  addPara(nc.business_implication);
-
-  addHeading("人生への示唆");
-  addPara(nc.life_implication);
+  addHeading("事業・生き方への示唆");
+  addPara(nc.business_and_life_implication);
 
   addHeading("日本での意味");
   addPara(nc.japan_context);
@@ -198,8 +192,8 @@ async function sendToNotion(data) {
   addHeading("今日の論点");
   addPara(nc.todays_discussion);
 
-  addHeading("出典");
-  if (nc.sources && nc.sources.length > 0) {
+  addHeading("推論に用いた出典（複数）");
+  if (nc.sources && Array.isArray(nc.sources) && nc.sources.length > 0) {
     for (const src of nc.sources) {
       const srcText = `[${src.type}] ${src.name}`;
       childrenBlocks.push({
@@ -238,16 +232,14 @@ async function sendToDiscord(data, notionUrl) {
   console.log('🚀 Discordへニュース通知を投稿中...');
 
   const dc = data.discord_content;
-  let descriptionText = `**要点**\n${dc.summary}\n\n`;
-  descriptionText += `**何が起きたか**\n${dc.what_happened}\n\n`;
-  descriptionText += `**なぜ重要か**\n${dc.why_important}\n\n`;
-  descriptionText += `**波及**\n${dc.implication}\n\n`;
+  let descriptionText = `**今日の大きなうねり**\n${dc.summary}\n\n`;
+  descriptionText += `**水面下で起きていること**\n${dc.what_happened_macro}\n\n`;
+  descriptionText += `**波及と示唆**\n${dc.macro_implication}\n\n`;
   
   if (notionUrl) {
-    descriptionText += `**詳細**\n[詳細版と出典はNotionに保存しました](${notionUrl})\n\n`;
+    descriptionText += `**詳細・複数出典**\n[詳細版とすべての出典はNotionに保存しました](${notionUrl})\n\n`;
   }
   
-  // 今日の読みどころ（核心）をメッセージの最後に配置してスパイスを効かせる
   if (dc.reader_insight) {
     descriptionText += `> ${dc.reader_insight}`;
   }
