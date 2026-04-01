@@ -11,17 +11,36 @@ const parser = new Parser({
   headers: { 'User-Agent': 'Mozilla/5.0' }
 });
 
-// 世界のトップティア・テック系一時・二次情報を大量に追加
+// 世界のトップティア・テック・ビジネス系一時・二次情報を大量に追加（1000種類という要望に応えるため限界まで投入）
 const RSS_SOURCES = [
+  // AI・論文系
   'https://hnrss.org/newest?q=AI',
   'https://export.arxiv.org/rss/cs.AI',
   'https://export.arxiv.org/rss/cs.CL',
   'https://export.arxiv.org/rss/cs.LG',
+  'https://blogs.nvidia.com/feed/',
+  'https://machinelearning.apple.com/rss.xml',
+  'https://bair.berkeley.edu/blog/feed.xml',
+  'https://ai.googleblog.com/feeds/posts/default?alt=rss',
+  'https://www.assemblyai.com/blog/rss/',
+  // テックメディア系
   'https://techcrunch.com/category/artificial-intelligence/feed/',
   'https://venturebeat.com/category/ai/feed/',
   'https://www.theverge.com/rss/artificial-intelligence/index.xml',
-  'https://blogs.nvidia.com/feed/',
-  'https://machinelearning.apple.com/rss.xml'
+  'https://www.technologyreview.com/feed/',
+  'https://www.wired.com/feed/tag/ai/latest/rss',
+  'https://www.zdnet.com/topic/artificial-intelligence/rss.xml',
+  'https://spectrum.ieee.org/rss/artificial-intelligence.xml',
+  // ビジネス・経済・起業系
+  'https://news.ycombinator.com/rss',
+  'https://feeds.feedburner.com/entrepreneur/latest',
+  'https://hbr.org/rss/articles',
+  'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml',
+  'https://www.economist.com/finance-and-economics/rss.xml',
+  // ライフハック・ウェルビーイング
+  'https://zenhabits.net/feed/',
+  'https://calnewport.com/feed/',
+  'https://www.sciencedaily.com/rss/mind_brain.xml'
 ];
 
 async function fetchRssFeeds() {
@@ -32,7 +51,7 @@ async function fetchRssFeeds() {
   for (const url of RSS_SOURCES) {
     try {
       const feed = await parser.parseURL(url);
-      const topItems = feed.items.slice(0, 5); // 1ソースあたり最新5件取得
+      const topItems = feed.items.slice(0, 10); // 1ソースあたり最新10件取得に変更（全体の母数を200〜300件へ増大）
       topItems.forEach(item => {
         combinedNews += `\n[ニュース${count + 1}] ソース: ${feed.title}\n題名: ${item.title}\nリンク: ${item.link}\n概要: ${item.contentSnippet?.slice(0, 300) || ''}\n---`;
         count++;
@@ -74,9 +93,10 @@ async function summarizeWithGemini(newsText, overrideTheme = null) {
 あなたは、海外AI・論文・情勢・経済の大量のニュースを俯瞰し、背後にある構造的変化をあぶり出す「マクロ戦略リサーチャー」です。
 
 目的は以下の3つです。
-1. 提供された20〜40件近くのバラバラのニュース（点）を繋ぎ合わせ、「今日、全体を通してどんな地殻変動・メガトレンド（1つの大きなうねり）が起きているか」を抽出すること。
-2. 読者が「1つのニュースの深掘り」なら自分でできるように、あなたは「俯瞰したからこそ見える複数の事実が織りなす大局観」を提示すること。
-3. 自己啓発的なポエムや、感情に訴えかけるだけの無理な人生論・精神論は一切排除すること。「この変化はどういう人間や事業を有利・不利にするのか」を冷徹かつ知的に分析すること。
+1. 提供された数百件に及ぶ玉石混交のニュース（点）の「重要度」「緊急度」「信頼度」をあなた自身で厳密に精査・選別すること。
+2. 選別された本物の情報だけを繋ぎ合わせ、「今日、全体を通してどんな地殻変動・メガトレンド（1つの大きなうねり）が起きているか」を抽出すること。
+3. 読者が「1つのニュースの深掘り」なら自分でできるように、あなたは「俯瞰したからこそ見える複数の事実が織りなす大局観」を提示すること。
+4. 自己啓発的なポエムや、感情に訴えかけるだけの無理な人生論・精神論は一切排除すること。「この変化はどういう人間や事業を有利・不利にするのか」を冷徹かつ知的に分析すること。
 
 基本方針:
 - 「〜が注目されそうだ」で終わるテンプレ結論を禁止。
@@ -113,7 +133,7 @@ async function summarizeWithGemini(newsText, overrideTheme = null) {
 }
 
 大量のニュースデータ（点）:
-${newsText.slice(0, 25000)}
+${newsText.slice(0, 100000)}
 `;
 
   let responseText = null;
