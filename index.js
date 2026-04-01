@@ -249,7 +249,7 @@ async function sendToDiscord(data, notionUrl) {
   }
 
   const message = {
-    username: "知的な朝の編集者",
+    username: "ぽじ神様からのお告げ",
     content: "",
     embeds: [{
       title: dc.title,
