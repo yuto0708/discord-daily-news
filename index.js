@@ -83,8 +83,8 @@ function getTodaysTheme() {
 async function summarizeWithGemini(newsText, overrideTheme = null) {
   console.log('🤖 Gemini APIでバラバラの情報を統合し「大きなうねり」を生成中...');
   const modelsToTry = [
-    'gemini-2.5-flash',
-    'gemini-flash-latest'
+    'gemini-2.5-pro',
+    'gemini-2.5-flash'
   ];
 
   const todaysTheme = overrideTheme || getTodaysTheme();
@@ -93,17 +93,15 @@ async function summarizeWithGemini(newsText, overrideTheme = null) {
 あなたは、海外AI・論文・情勢・経済の大量のニュースを俯瞰し、背後にある構造的変化をあぶり出す「マクロ戦略リサーチャー」です。
 
 目的は以下の3つです。
-1. 提供された数百件に及ぶ玉石混交のニュース（点）の「重要度」「緊急度」「信頼度」をあなた自身で厳密に精査・選別すること。
-2. 選別された本物の情報だけを繋ぎ合わせ、「今日、全体を通してどんな地殻変動・メガトレンド（1つの大きなうねり）が起きているか」を抽出すること。
-3. 読者が「1つのニュースの深掘り」なら自分でできるように、あなたは「俯瞰したからこそ見える複数の事実が織りなす大局観」を提示すること。
-4. 自己啓発的なポエムや、感情に訴えかけるだけの無理な人生論・精神論は一切排除すること。「この変化はどういう人間や事業を有利・不利にするのか」を冷徹かつ知的に分析すること。
+1. 提供された数百件の手元情報から、重要度・緊急度・信頼度を精査し、今日の世界の構造変化（メガトレンド）をたった1つの線に繋ぐこと。
+2. その際、分析のロジックを必ず「現象 → 価値の移動 → 現実の欠如（ボトルネック） → 次に伸びる市場」という深い構造で展開すること。（例：AIが定型労働を圧縮 → 人間の価値は意味づけに移動 → しかし現代人は集中力を喪失 → 能力拡張・認知回復市場が伸びる）
+3. 機上の空論や「賢そうな総論」を徹底排除し、えげつないほど具体的なレベルまで「伸びる事業」「沈む事業」「発信するべきSNSのテーマ」を列挙し、読者の血肉にすること。
 
 基本方針:
 - 「〜が注目されそうだ」で終わるテンプレ結論を禁止。
 - 直訳調、無味乾燥な優等生ワードを禁止。
-- 分析に用いた出典群（ニュース群）は「Sources（出典）」にすべて（最低5件〜10件程度）漏らさず記載させること。
-- 人生への接続とは「ポエムを書くこと」ではなく、「大きな構造を見せ、読者の意思決定の前提を変えること」です。
-- 文字数はDiscordは短く、Notionは分析的に詳細に分けること。
+- 情報源（Sources）を単に並べるのではなく、『一次情報（論文・公式）』『論考・解釈（個人の深い考察）』『二次情報（メディア）』『観測情報（SNSやHackerNewsなどの入口）』に格付け・分類して評価すること。
+- Discordへのメッセージの「核心」は、極限まで短く鋭利に研ぎ澄ますこと。（例：「希少になるのは時間ではなく、増えた時間を高密度に使える集中力になる」など）
 
 本日の曜日テーマ（メガトレンドを解釈する際にこの視点を意識する）:
 【 ${todaysTheme} 】
@@ -115,22 +113,26 @@ async function summarizeWithGemini(newsText, overrideTheme = null) {
     "summary": "複数のニュースから炙り出される、今日一番大きな構造変化（1〜2文）",
     "what_happened_macro": "水面下で起きているうねりを、どのニュース（複数）が示唆しているか",
     "macro_implication": "このうねりが、事業や働き方の「勝ち筋・生き筋」をどう変えるか（冷静な指摘）",
-    "reader_insight": "今日の知見（読者に関係ある分析的でシビアな核心を1行で）"
+    "reader_insight": "今日の知見（読者に関係ある分析的で鋭利・シビアな核心を、短く1〜3文で言い切ること）"
   },
   "notion_content": {
     "title": "今日のメガトレンド",
     "summary": "要旨",
-    "mega_trend": "今日の構造変化の核心（点と点を繋いで分かった真実）",
-    "supporting_facts": "トレンドを裏付ける具体的な出来事群（複数のニュースの組み合わせ・対比）",
-    "business_and_life_implication": "事業と個人の生き方への示唆（この変化はどんな人を有利にし、どんな人を過去のものにするか。普通から外れる余地はどこに生まれるか）",
-    "japan_context": "日本での意味",
-    "counter_argument": "反論・留保",
+    "mega_trend_logic": "今日の構造変化の核心（「事象 → 価値の移動 → 現実の逆説・ボトルネック → 新市場」の多段ロジックで深い流れを描写すること）",
+    "business_opportunities": "事業や市場への超具体的な示唆（【伸びやすい事業】と【弱くなりやすい事業】を極限まで具体化して複数箇条書きで提示）",
+    "sns_implication": "SNSや個人の発信テーマへの示唆（「〜について」ではなく、「〜より、〜の時代」のような対比で説得力のある発信軸を複数箇条書きで提示）",
+    "japan_context": "日本市場や日本の働き方への意味",
+    "counter_argument": "反論・留保（熱狂に対する冷静な視点）",
     "todays_discussion": "曜日のテーマ【 ${todaysTheme} 】に絡めた今日の論点",
     "sources": [
-      { "type": "情報種別", "name": "記事タイトル/情報源", "url": "URL" }
+      { "category": "一次情報・準一次情報・論考・二次情報・観測情報 のいずれか", "name": "記事タイトル/情報源", "url": "URL", "reason": "この情報源をどう評価し、何の土台に使ったか（短く）" }
     ]
   }
 }
+
+【超重要警告】
+出力するJSONの中に、絶対にエスケープされていないダブルクオート(")や改行(
+)を含めないでください。JSON.parse()でエラーになる文字列は厳禁です。
 
 大量のニュースデータ（点）:
 ${newsText.slice(0, 100000)}
@@ -194,16 +196,16 @@ async function sendToNotion(data) {
   addHeading("メガトレンド（要旨）");
   addPara(nc.summary);
   
-  addHeading("今日の構造変化の核心");
-  addPara(nc.mega_trend);
+  addHeading("構造変化の核心と深いロジック");
+  addPara(nc.mega_trend_logic);
 
-  addHeading("トレンドを裏付ける出来事");
-  addPara(nc.supporting_facts);
+  addHeading("超具体的な事業・市場への示唆");
+  addPara(nc.business_opportunities);
 
-  addHeading("事業・生き方への示唆");
-  addPara(nc.business_and_life_implication);
+  addHeading("SNS・個人発信テーマへの示唆");
+  addPara(nc.sns_implication);
 
-  addHeading("日本での意味");
+  addHeading("日本市場での意味");
   addPara(nc.japan_context);
 
   addHeading("反論・留保");
@@ -212,10 +214,10 @@ async function sendToNotion(data) {
   addHeading("今日の論点");
   addPara(nc.todays_discussion);
 
-  addHeading("推論に用いた出典（複数）");
+  addHeading("精査・格付け済みの情報の土台（出典）");
   if (nc.sources && Array.isArray(nc.sources) && nc.sources.length > 0) {
     for (const src of nc.sources) {
-      const srcText = `[${src.type}] ${src.name}`;
+      const srcText = `[${src.category}] ${src.name} - ${src.reason}`;
       childrenBlocks.push({
         object: 'block', type: 'paragraph',
         paragraph: { rich_text: [{ type: 'text', text: { content: srcText, link: src.url ? { url: String(src.url) } : null } }] }
