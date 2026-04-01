@@ -1,0 +1,16 @@
+{
+  "name": "discord-daily-news",
+  "version": "1.0.0",
+  "description": "Daily AI/Business News to Discord",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.6.0",
+    "dotenv": "^16.4.5",
+    "rss-parser": "^3.13.0"
+  }
+}
