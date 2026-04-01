@@ -3,6 +3,9 @@ import Parser from 'rss-parser';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { Client } from '@notionhq/client';
+import OpenAI from 'openai';
+import fs from 'fs';
+import FormData from 'form-data';
 
 dotenv.config();
 
@@ -11,16 +14,21 @@ const parser = new Parser({
   headers: { 'User-Agent': 'Mozilla/5.0' }
 });
 
+let openai = null;
+if (process.env.OPENAI_API_KEY) {
+  openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
+
 // 世界のトップティアが追う一次情報・大元に近いソースに厳選
 const RSS_SOURCES = [
-  'https://hnrss.org/newest?q=AI', // Hacker News (AI)
-  'https://export.arxiv.org/rss/cs.AI', // ArXiv (cs.AI)
-  'https://export.arxiv.org/rss/cs.CL', // ArXiv (Computation and Language)
-  'https://export.arxiv.org/rss/cs.LG', // ArXiv (Machine Learning)
+  'https://hnrss.org/newest?q=AI',
+  'https://export.arxiv.org/rss/cs.AI',
+  'https://export.arxiv.org/rss/cs.CL',
+  'https://export.arxiv.org/rss/cs.LG',
 ];
 
 async function fetchRssFeeds() {
-  console.log('📰 RSSフィードから最新ニュースを取得中...');
+  console.log('📰 RSS情報を取得中...');
   let combinedNews = '';
   
   for (const url of RSS_SOURCES) {
@@ -37,104 +45,84 @@ async function fetchRssFeeds() {
   return combinedNews;
 }
 
+function getTodaysTheme() {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0(日)〜6(土)
+  const themes = [
+    "日曜: 長期構造変化と人生設計",
+    "月曜: 6か月以内の市場変化をわかりやすく整理",
+    "火曜: 勝ち筋になる事業機会を具体化",
+    "水曜: 日本市場、日本企業、日本の働き方への影響",
+    "木曜: 生活とウェルビーイングへの影響（可処分時間、ストレス、孤独、不安、学び方、休み方、ウェルビーイング市場で伸びるサービス）",
+    "金曜: 普通じゃない働き方、生き方、人生の選択肢（個人の自由度向上、会社員以外の選択肢の現実化、地方、海外、1人事業、半隠居、複業、どう生きるかへの接続）",
+    "土曜: 今のうちに仕込むべき行動（今週試すべきツール、学ぶべきスキル、見るべき企業や市場、個人として持つべき小さなポジション、半年後に人生が少し面白くなる種まき）"
+  ];
+  return themes[dayOfWeek];
+}
+
 async function summarizeWithGemini(newsText) {
-  console.log('🤖 Gemini APIでニュースを分析・要約中...');
+  console.log('🤖 Gemini APIで静かで知的な編集者のブリーフを生成中...');
   const modelsToTry = [
     'gemini-2.5-flash',
     'gemini-flash-latest'
   ];
 
-  // ユーザーが作成した完璧なプロンプトを組み込み
+  const todaysTheme = getTodaysTheme();
+
   const prompt = `
-あなたは、海外のAI・ビジネス・未来予測に関する高信頼情報を収集し、単なる要約ではなく、「今、何が起きていて、それが何を意味し、事業・発信・ポジション取りにどう影響するか」まで解釈する、超優秀な戦略リサーチャーです。
+あなたは、海外AI・論文・情勢・経済を毎日収集し、朝に読むための「知的で静かなブリーフを作る編集者」です。
 
-目的は、「毎朝7時に、世界の最先端情報を、日本語で、短く、構造的に、意思決定できる形で受け取ること」です。
+目的は3つです。
+1. 毎朝、短時間で世界の重要変化を把握できること
+2. ウェルビーイングと「普通と違った面白い人生」に資する視点を得ること
+3. 事業機会、6か月以内の市場変化、日本市場への意味も見落とさないこと
 
-## 最重要ルール
-- 必ず最新時点の情報を前提に調査してください。
-- 年号や前提を勝手に2025年で固定しないでください。2026年以降にしてください。
-- 常に現在日時を基準にして、最新のニュース・論文・発表・レポート・制度変更を取得してください。
-- 情報が古い場合は採用しないでください。
-- 「過去にはこう言われていた」ではなく、「今どうなっているか」を優先してください。
-- 不確実なものは不確実と明記してください。
-- 事実と解釈を分けてください。
-- ただの要約で終わらず、必ずAIとしての解釈・示唆・未来予測まで出してください。
+基本方針:
+- Discordには短いニュース版を出す
+- Notionには2000〜3000字の詳細版を出す
+- 音声用に約700〜1200字（5分程度）の台本を作成する
+- DiscordとNotion、音声は同じテーマを扱うが、文章は使い分ける。完全コピペにしない。
+- 絵文字は一切使わない（システム側でも排除しています）
+- 煽り、ポエム、SNS的な大げさなテンションは使わない（革命、破壊的、やばい等の安い強調は使わない）
+- 面白さは刺激ではなく、視点の鋭さと論点整理で出す
+- 朝読む（聞く）前提なので、静かで知的で読みやすい文体にする
+- 同じ意味の繰り返しをしない
+- 「つまり何が重要か」を先に書く
+- 事実と解釈を分ける
+- 断定が難しい箇所には留保を置く
 
-## リサーチ対象
-以下のテーマを優先して調査してください。
-### 1. AI
-新モデル / 論文 / エージェント / 自動化 / 開発ツール / 推論 / マルチモーダル / 音声 / 動画生成 / 主要AI企業の動向 / 実務活用事例 / AIによる産業変化
-### 2. ビジネス
-海外の新規事業 / SaaS / マーケティング / 経営戦略 / 市場変化 / 収益モデル / 個人・企業の勝ち筋 / AIネイティブな事業 / これから伸びる事業領域 / 逆に衰退するビジネス領域
-### 3. 未来予測
-テクノロジーの進化 / 業界構造の変化 / 雇用の変化 / 消費者行動の変化 / AIによる社会変化 / 今後1年〜10年で起きそうな重要変化 / 日本市場でまだ認知されていない変化 / 海外で先に進んでいて、日本では遅れているトレンド
+重要度の判断基準:
+市場構造を変えるか / 6か月以内に実務や投資に影響するか / 日本市場や日本の働き方に意味があるか / 個人の生き方や幸福度に波及するか / 一時的な話題ではなく継続的変化につながるか
 
-## 収集ルール
-- 新規性があるものを優先
-- ただし、話題性よりも重要性を優先
-- 世界全体で見て重要かどうかで判断
-- 重複情報は統合する
-- 一次情報がある場合は必ずそちらを優先
-- 論文は未査読かどうかを明記
-- 単なるニュース紹介で終わらず、必ず意味を解釈する
-- 表面的な現象ではなく、構造変化を重視する
-- 「誰が得をするか」「誰が不利になるか」「どこに利益機会が生まれるか」まで考察する
-- 日本でまだ知られていないが重要なものを優先的に拾う
-- 日本市場への転用可能性も考える
-- 短期トレンドだけでなく、中長期の潮目も拾う
+本日の曜日テーマ（これに必ず沿って重点を置くこと）:
+【 ${todaysTheme} 】
+※ベースケース、強気ケース、崩れるケースなどの区分も意識し、毎回同じような結論を避けてください技術、市場、規制、生活、働き方、日本市場、個人の行動のいずれかにフォーカスを当ててください。
 
-## AIとしての解釈ルール
-ここが非常に重要です。あなたは単にニュースを並べるのではなく、その情報から一段上の抽象度で意味を取り出してください。
-- 「この情報が出たということは、市場は次にどこへ向かうのか」
-- 「この流れはSNS発信にどう影響するのか」
-- 「今から仕込むならどのテーマが良いのか」
-- 「今後数年で価値が落ちるスキル・事業は何か」
-- 「まだ日本では認識されていない先行トレンドは何か」
-ただし、根拠のない断定は禁止。妄想は禁止。必ず事実ベースで推論し、推論である部分は推論と分かるように書く。
-
-## 文章ルール
-- 日本語で書く
-- 短く、無駄なく、構造的に
-- 抽象論で終わらない
-- 経営判断・発信判断・事業判断に使える粒度にする
-- 誇張しない
-- 重要なものだけ出す
-- 面白さより、重要性・再現性・先回り価値を優先する
-
-## 出力形式
-毎回、重要度の高いものだけを **3〜7件** に絞り、必ず以下のJSONフォーマットで出力してください。
-Markdownの \`\`\`json などの記号は一切含めず、純粋なJSONオブジェクトのみを出力してください。
-
+出力フォーマット（厳密なJSONオブジェクトのみ出力）:
 {
-  "articles": [
-    {
-      "category": "AI / ビジネス / 未来予測 / 政策 / 市場 のいずれか",
-      "title": "要点（惹きつけられるタイトル）",
-      "what_happened": "何が起きたか",
-      "info_type": "一次情報 / 準一次情報 / 二次情報のいずれか",
-      "reliability": "高 / 中 / 低 のいずれか",
-      "why_important": "なぜ重要か",
-      "future_changes": "今後起きうる変化",
-      "ai_interpretation": "AIとしての解釈",
-      "business_implication": "事業への示唆",
-      "sns_implication": "SNS発信への示唆",
-      "japan_context": "日本市場での意味",
-      "growing_area": "伸びる可能性がある領域",
-      "declining_area": "衰退リスクがある領域",
-      "watch_points": "今のうちに見るべき点",
-      "source_name": "情報源",
-      "link": "URL"
-    }
-  ],
-  "summary": {
-    "most_important": "今日いちばん重要な変化",
-    "structural_change": "今日の情報から見える構造変化",
-    "themes_to_watch": "今後ウォッチすべきテーマ",
-    "sns_themes": "今、SNSで発信するなら有望なテーマ",
-    "business_opportunities": "今、事業として張るなら有望な領域",
-    "declining_risks": "今後数年で弱くなる可能性がある領域",
-    "info_gap": "日本ではまだ情報格差になっているテーマ"
-  }
+  "discord_content": {
+    "title": "タイトル",
+    "summary": "一言で要旨",
+    "what_happened": "事実を簡潔に（300〜600字以内）",
+    "why_important": "意味を簡潔に",
+    "implication": "事業、投資、生活、日本市場のいずれかへの波及"
+  },
+  "notion_content": {
+    "title": "タイトル",
+    "summary": "要旨",
+    "what_happened": "何が起きたか",
+    "background": "背景",
+    "why_important": "なぜ重要か",
+    "business_implication": "事業・市場への示唆",
+    "japan_context": "日本での意味",
+    "counter_argument": "反論・留保",
+    "todays_discussion": "今日の論点（今日の【 ${todaysTheme} 】テーマに必ず絡めて、深く静かな考察を記載）",
+    "sources": [
+      { "type": "一次情報", "name": "情報源名", "url": "URL" },
+      { "type": "二次情報", "name": "情報源名", "url": "URL" }
+    ]
+  },
+  "audio_script": "おはようございます。（名前は名乗らなくて良いです。静かに始めてください）。今日の最重要トピックは...（以降、箇条書きは使わず、自然な話し言葉の台本。1文を短く。15秒の導入、トピック、なぜ重要か、生活等への波及、今日の見るべきポイント、15秒の締めの構成。全体で700〜1200字程度。"要するに"等の案内を入れること。煽らない、静かだが無機質ではないトーン。）"
 }
 
 ニュースデータ:
@@ -148,7 +136,7 @@ ${newsText.slice(0, 15000)}
       const model = genAI.getGenerativeModel({ model: modelName });
       const result = await model.generateContent(prompt);
       responseText = result.response.text();
-      console.log(`✅ モデル ${modelName} で生成成功！`);
+      console.log(`✅ モデル ${modelName} で生成成功`);
       break; 
     } catch (e) {
       console.log(`⚠️ モデル失敗: ${e.message}`);
@@ -162,7 +150,31 @@ ${newsText.slice(0, 15000)}
     return JSON.parse(text);
   } catch (e) {
     console.error("JSONパース失敗:", responseText);
-    throw new Error('Gemini出力エラー');
+    throw new Error('Gemini出力形式エラー');
+  }
+}
+
+// ======= 音声生成 =======
+async function generateAudio(textString) {
+  if (!openai) {
+    console.log('⚠️ OpenAI APIキーがないため、音声生成をスキップします。');
+    return null;
+  }
+  console.log('🎙️ OpenAI TTSで朝の音声を生成中...');
+  const filePath = "todays_brief.mp3";
+  try {
+    const mp3 = await openai.audio.speech.create({
+      model: "tts-1",
+      voice: "nova", // 落ち着いた自然な声
+      input: textString,
+    });
+    const buffer = Buffer.from(await mp3.arrayBuffer());
+    fs.writeFileSync(filePath, buffer);
+    console.log('✅ 音声生成完了');
+    return filePath;
+  } catch (err) {
+    console.error('⚠️ 音声生成エラー:', err.message);
+    return null;
   }
 }
 
@@ -173,7 +185,7 @@ async function sendToNotion(data) {
     return null;
   }
 
-  console.log('📝 Notionへ「本日の美しいレポートページ」を自動生成中...');
+  console.log('📝 Notionへ「詳細版レポート」を自動生成中...');
   const notion = new Client({ auth: process.env.NOTION_API_KEY });
 
   let parentPageId = process.env.NOTION_PARENT_PAGE_ID;
@@ -182,72 +194,59 @@ async function sendToNotion(data) {
     parentPageId = match[1];
   }
 
+  const nc = data.notion_content;
   const childrenBlocks = [];
   
-  // 1. 本日の総括 (Summary)
-  childrenBlocks.push({ object: 'block', type: 'heading_2', heading_2: { rich_text: [{ type: 'text', text: { content: "🎯 本日の総括" } }] } });
-  
-  const addSummaryPoint = (title, content, emoji) => {
-    childrenBlocks.push({
-      object: 'block',
-      type: 'callout',
-      callout: { icon: { type: "emoji", emoji }, rich_text: [{ type: 'text', text: { content: `【${title}】\n${content}` } }] }
-    });
+  const addHeading = (text) => {
+    childrenBlocks.push({ object: 'block', type: 'heading_2', heading_2: { rich_text: [{ type: 'text', text: { content: text } }] } });
   };
-  addSummaryPoint("今日いちばん重要な変化", data.summary.most_important, "🔥");
-  addSummaryPoint("今日から見える構造変化", data.summary.structural_change, "🏗️");
-  addSummaryPoint("今後ウォッチすべきテーマ", data.summary.themes_to_watch, "👀");
-  addSummaryPoint("SNS発信で有望なテーマ", data.summary.sns_themes, "📱");
-  addSummaryPoint("事業として張るなら", data.summary.business_opportunities, "💼");
-  addSummaryPoint("今後数年で弱くなる領域", data.summary.declining_risks, "📉");
-  addSummaryPoint("日本での情報格差テーマ", data.summary.info_gap, "🤫");
-  childrenBlocks.push({ object: 'block', type: 'divider', divider: {} });
+  const addPara = (text) => {
+    // 2000文字一気に入れるとNotionのブロック制限に引っかかる場合があるので適切に分割
+    const chunks = text.match(/.{1,1500}/g) || [text];
+    for (const chunk of chunks) {
+      childrenBlocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: chunk } }] } });
+    }
+  };
 
-  // 2. 各記事の詳細 (Articles)
-  for (const article of data.articles) {
-    childrenBlocks.push({
-      object: 'block', type: 'heading_2',
-      heading_2: { rich_text: [{ type: 'text', text: { content: `【${article.category}】 ${article.title}`, link: article.link ? { url: String(article.link) } : null } }] }
-    });
-    
-    // 基本スペック
-    childrenBlocks.push({
-      object: 'block', type: 'paragraph',
-      paragraph: { rich_text: [{ type: 'text', text: { content: `情報源: ${article.source_name} | 情報の種類: ${article.info_type} | 信頼度: ${article.reliability}` }, annotations: { color: "gray" } }] }
-    });
+  addHeading("要旨");
+  addPara(nc.summary);
+  
+  addHeading("何が起きたか");
+  addPara(nc.what_happened);
 
-    const addArticlePoint = (title, content, emoji) => {
+  addHeading("背景");
+  addPara(nc.background);
+
+  addHeading("なぜ重要か");
+  addPara(nc.why_important);
+
+  addHeading("事業・市場への示唆");
+  addPara(nc.business_implication);
+
+  addHeading("日本での意味");
+  addPara(nc.japan_context);
+
+  addHeading("反論・留保");
+  addPara(nc.counter_argument);
+
+  addHeading("今日の論点");
+  addPara(nc.todays_discussion);
+
+  addHeading("出典");
+  if (nc.sources && nc.sources.length > 0) {
+    for (const src of nc.sources) {
+      const srcText = `[${src.type}] ${src.name}`;
       childrenBlocks.push({
-        object: 'block', type: 'callout',
-        callout: { icon: { type: "emoji", emoji }, rich_text: [{ type: 'text', text: { content: `${title}:\n${content}` } }] }
+        object: 'block', type: 'paragraph',
+        paragraph: { rich_text: [{ type: 'text', text: { content: srcText, link: src.url ? { url: String(src.url) } : null } }] }
       });
-    };
-    addArticlePoint("何が起きたか", article.what_happened, "📰");
-    addArticlePoint("なぜ重要か", article.why_important, "⚡");
-    addArticlePoint("今後起きうる変化", article.future_changes, "🔮");
-    addArticlePoint("AIとしての解釈", article.ai_interpretation, "🤖");
-    addArticlePoint("事業への示唆", article.business_implication, "🏢");
-    addArticlePoint("SNS発信への示唆", article.sns_implication, "✍️");
-    addArticlePoint("日本市場での意味", article.japan_context, "🇯🇵");
-    
-    // リスト型
-    childrenBlocks.push({
-      object: 'block', type: 'bulleted_list_item',
-      bulleted_list_item: { rich_text: [{ type: 'text', text: { content: `📈 伸びる領域: ${article.growing_area}` } }] }
-    });
-    childrenBlocks.push({
-      object: 'block', type: 'bulleted_list_item',
-      bulleted_list_item: { rich_text: [{ type: 'text', text: { content: `📉 衰退リスク領域: ${article.declining_area}` } }] }
-    });
-    childrenBlocks.push({
-      object: 'block', type: 'bulleted_list_item',
-      bulleted_list_item: { rich_text: [{ type: 'text', text: { content: `👀 今のうちに見るべき点: ${article.watch_points}` } }] }
-    });
-    childrenBlocks.push({ object: 'block', type: 'divider', divider: {} });
+    }
+  } else {
+    addPara("出典情報なし");
   }
 
   const todayStr = new Date().toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
-  const pageTitle = `🚀 戦略レポート: ${todayStr}`;
+  const pageTitle = `${todayStr} - ${nc.title}`;
 
   try {
     const response = await notion.pages.create({
@@ -260,43 +259,51 @@ async function sendToNotion(data) {
     console.log('✅ Notionページ作成完了: ', response.url);
     return response.url;
   } catch (error) {
-    console.error('⚠️ Notionの書き込みに失敗しました:', error.body || error.message);
+    console.error('⚠️ Notionへの書き込みエラー:', error.body || error.message);
     return null;
   }
 }
 
 // ======= Discord送信 =======
-async function sendToDiscord(data, notionUrl) {
+async function sendToDiscord(data, notionUrl, audioPath) {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
   if (!webhookUrl) return;
 
-  console.log('🚀 Discordへサマリー通知を投稿中...');
+  console.log('🚀 Discordへニュース通知を投稿中...');
 
-  let descriptionText = `**💡 今日いちばん重要な変化**\\n${data.summary.most_important}\\n\\n`;
-  descriptionText += `**📰 ピックアップニュース (${data.articles.length}件)**\\n`;
-  for (const a of data.articles) {
-    descriptionText += `・ [${a.title}](${a.link || 'https://news.google.com'})\\n`;
-  }
+  const dc = data.discord_content;
+  let descriptionText = `**要点**\n${dc.summary}\n\n`;
+  descriptionText += `**何が起きたか**\n${dc.what_happened}\n\n`;
+  descriptionText += `**なぜ重要か**\n${dc.why_important}\n\n`;
+  descriptionText += `**波及**\n${dc.implication}\n\n`;
   
   if (notionUrl) {
-    descriptionText += `\\n\\n📖 **[👉 リサーチの全編（詳細な考察とSNSネタ）をNotionで読む！](${notionUrl})**`;
+    descriptionText += `\n**詳細**\n[詳細版と出典はNotionに保存しました](${notionUrl})`;
   } else {
-    descriptionText += `\\n\\n⚠️ *Notionの全編レポートは設定不足のためお休みです*`;
+    descriptionText += `\n**詳細**\nNotionの連携設定がないため保存されませんでした。`;
   }
 
-  const message = {
-    username: "戦略リサーチャーAI",
-    content: "🌅 おはようございます！世界の一次情報に基づく最先端情報の戦略的解釈をお届けします📰",
-    embeds: [{
-      title: "🚀 世界の最先端ニュースと構造変化",
-      color: 0xffd700,
-      description: descriptionText,
-      footer: { text: "Strategic AI Researcher Bot" }
-    }]
+  const embed = {
+    title: dc.title,
+    color: 0x4a4a4a, // 静かな色（ダークグレー）
+    description: descriptionText
   };
 
   try {
-    await axios.post(webhookUrl, message);
+    const form = new FormData();
+    // Discord Embedを含んだメッセージ本体
+    form.append('payload_json', JSON.stringify({
+      username: "知的な朝の編集者",
+      content: "", // 本文はなし、Embedのみでスッキリと
+      embeds: [embed]
+    }));
+    
+    // MP3ファイルがあれば添付
+    if (audioPath && fs.existsSync(audioPath)) {
+      form.append('file', fs.createReadStream(audioPath), 'todays_briefing.mp3');
+    }
+
+    await axios.post(webhookUrl, form, { headers: form.getHeaders() });
     console.log('✅ Discord投稿成功！');
   } catch (err) {
     console.error('⚠️ Discord Webhookエラー:', err.message);
@@ -309,8 +316,10 @@ async function main() {
 
   const data = await summarizeWithGemini(feeds);
   if (data) {
+    // 限界まで自動化： Notionにページ作成 -> 音声生成 -> Discordへ送信
     const notionUrl = await sendToNotion(data);
-    await sendToDiscord(data, notionUrl);
+    const audioPath = await generateAudio(data.audio_script);
+    await sendToDiscord(data, notionUrl, audioPath);
   }
 }
 
